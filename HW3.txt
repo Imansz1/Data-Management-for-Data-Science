@@ -1,0 +1,129 @@
+1// We want to find orders between the date 2012-03-19 and 2012-03-25. (only works in compass).
+
+db.getCollection('orders').find({ created_at: { $gte: ("2012-03-19"), $lt: ("2012-03-25") } })
+
+
+2// We want to know all kind of UTM sources we have.
+
+db.website_sessions.distinct("utm_source")
+
+
+3// We want to show the orders that primary product is 1 or 2.
+
+db.orders.find( { primary_product_id: { $in: [ 1, 2 ] } } )
+
+
+
+4// We want to find all of the orders which product 4 is the primary product and we need only id, price and cost of goods sold in usd fields.
+
+db.orders.find({primary_product_id:4}, {_id:1, price_usd: 1, cogs_usd:1})
+
+
+
+5// We want to show where device is desktop and utm_source is gsearch and utm_campaign is nonbrand.
+
+db.website_sessions.find( { device_type: "desktop" , $and: [ { utm_source: "gsearch"}, {utm_campaign: "nonbrand"}]})
+
+
+
+
+6// we want to see the orders which primary product is 1 and grouping them based on the number of items in the orders and find the sum of money we get for each order.
+
+db.orders.aggregate([{ $match: { primary_product_id: 1 }},
+ {$group: {_id: "$items_purchased", total: {$sum: "$price_usd"}}}])
+
+
+
+
+
+7// We want to see all of the orders details related to the each product. 
+db.products.aggregate([
+{$lookup:
+        {from:"orders",
+           localField: "product_id",
+           foreignField: "primary_product_id",
+           as: "related_orders"
+            }}
+])
+
+
+
+
+8// We want to find out that after the date 2012-03-20, how many of each type of product have been sold.
+
+db.orders.aggregate([{ $match: { created_at: {$gte: "2012-03-20" } }},
+ {$group: {_id: "$primary_product_id", count: {$sum: 1}}}])
+
+
+			
+			
+9//We try to calculate the margin of the business for each product.
+
+db.order_items.aggregate([   
+{
+        $group : {
+            _id :  {
+               
+                id : "$product_id"
+                }, 
+            price : {$sum: "$price_usd"} , 
+            cost : {$sum:"$cogs_usd"}
+        }
+    },
+    {
+        $addFields : {
+            benefit: {$subtract: [ "$price", "$cost" ]}
+        }
+    },
+    {$sort:{"benefit":-1}}
+    
+ ])
+
+
+
+
+10// We want to find that how many of our website sessions came from which utm source.
+
+db.website_sessions.aggregate([{ $match: { }},
+ {$group: {_id: "$utm_source", count: {$sum: 1}}},{$sort:{count:-1}}])
+
+
+
+
+
+11// We want to get discount to the orders in which the price is higher than 48.
+
+
+
+db.orders.aggregate( [
+   {
+      $project: {
+         originalPrice:"$price_usd", 
+         finalprice: {
+            $let: {
+               vars: {
+                  total: "$price_usd",
+                  discounted: { $cond: { if: {$gt:["$price_usd",48]}, then: 0.9, else: 1 } }
+               },
+               in: { $multiply: [ "$$total", "$$discounted" ] }
+            }
+         },"_id":0
+      }
+   }
+] )
+
+
+12// We want to find the primary item of each order from order_items collection. 
+
+db.orders.aggregate([
+    {$lookup:
+        {
+            from: 'order_items',
+            localField: 'order_id',
+            foreignField: 'order_id',
+            as: 'primary_product'
+        }
+    },
+    {$project: {user_id: 1, "primary_product.is_primary_item": 1}}
+  ])
+
